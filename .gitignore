@@ -1,0 +1,15 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Trained model artefacts
+models/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Misc
+.env
+*.joblib
