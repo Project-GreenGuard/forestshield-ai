@@ -35,18 +35,16 @@ from typing import Any, Dict, Optional
 
 from utils import risk_level_from_score, rule_based_risk_score
 
-# ---------------------------------------------------------------------------
-# Optional lazy-loaded model
-# ---------------------------------------------------------------------------
-
 _MODEL = None          # cached model object (or False if unavailable)
 _MODEL_PATH_ENV = "FORESTSHIELD_MODEL_PATH"
 _FALLBACK_VERSION = "v1-rule-based"
+_CALIBRATOR = None     # cached calibrator for v3+ models
 
 
 def _load_model() -> Optional[Any]:
     """
     Try to load a joblib model from ``FORESTSHIELD_MODEL_PATH``.
+    Falls back to v4 (optimized) → v3 (calibrated) → v2 (original) if env var not set.
     Returns the model object on success, ``None`` otherwise.
     """
     global _MODEL
@@ -54,6 +52,16 @@ def _load_model() -> Optional[Any]:
         return _MODEL if _MODEL is not False else None
 
     model_path = os.getenv(_MODEL_PATH_ENV)
+    
+    # Fallback to best available model (v4 > v3 > v2)
+    if not model_path:
+        models_dir = Path(__file__).parent.parent / "models"
+        for model_name in ["forestshield_v4.joblib", "forestshield_v3.joblib", "forestshield_v2.joblib"]:
+            candidate = models_dir / model_name
+            if candidate.exists():
+                model_path = str(candidate)
+                break
+
     if not model_path:
         _MODEL = False
         return None
@@ -67,11 +75,6 @@ def _load_model() -> Optional[Any]:
         print(f"[ForestShield AI] Could not load model ({exc}); using rule-based fallback.")
         _MODEL = False
         return None
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 # Ordered list of feature names expected by a trained sklearn model.
 # Must match the column order used during training (see training/train.py).
@@ -100,7 +103,7 @@ def build_feature_vector(sensor_payload: Dict[str, Any]) -> Dict[str, float]:
 
     Returns
     -------
-    dict with keys matching ``FEATURE_COLUMNS``.
+    dict with keys matching ``FEATURE_COLUMNS`` plus derived features for v4+.
     """
     temperature = float(sensor_payload.get("temperature", 0.0))
     humidity = float(sensor_payload.get("humidity", 0.0))
@@ -124,6 +127,15 @@ def build_feature_vector(sensor_payload: Dict[str, Any]) -> Dict[str, float]:
 
     hour_of_day = float(ts.hour)
     month = float(ts.month)
+    day_of_week = float(ts.weekday())
+
+    # Derived features (for v4+ models)
+    temp_normalized = temperature / 50.0
+    humidity_inverse = 1.0 - (humidity / 100.0)
+    if nearest_fire_distance > 0:
+        fire_proximity_score = max(0.0, 100.0 - nearest_fire_distance * 2.0)
+    else:
+        fire_proximity_score = 0.0
 
     return {
         "temperature": temperature,
@@ -133,6 +145,10 @@ def build_feature_vector(sensor_payload: Dict[str, Any]) -> Dict[str, float]:
         "nearest_fire_distance": nearest_fire_distance,
         "hour_of_day": hour_of_day,
         "month": month,
+        "temp_normalized": temp_normalized,
+        "humidity_inverse": humidity_inverse,
+        "fire_proximity_score": fire_proximity_score,
+        "day_of_week": day_of_week,
     }
 
 
@@ -148,7 +164,7 @@ def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
     Strategy
     --------
     1. If a trained model is available (``FORESTSHIELD_MODEL_PATH`` is set
-       and the file exists), use it.
+       or defaults to v3/v2), use it.
     2. Otherwise fall back to the deterministic rule-based formula so the
        system works end-to-end without a trained artefact.
     """
@@ -158,9 +174,39 @@ def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
         # Build a 2-D array in the expected column order.
         import numpy as np  # type: ignore
 
-        x = np.array([[features.get(col, 0.0) for col in FEATURE_COLUMNS]])
+    if model is not None:
+        # Build a 2-D array in the expected column order.
+        import numpy as np  # type: ignore
+
+        # Use model's feature columns if available (v4), otherwise use standard columns
+        feature_columns = getattr(model, 'feature_columns', FEATURE_COLUMNS)
+        x = np.array([[features.get(col, 0.0) for col in feature_columns]])
+        
+        # Apply scaling if available (v4+ models)
+        if hasattr(model, 'scaler'):
+            x = model.scaler.transform(x)
+        
         raw_score = float(model.predict(x)[0])
-        risk_score = round(min(max(raw_score, 0.0), 100.0), 2)
+        
+        # Apply calibration if available (v3+ models)
+        if hasattr(model, 'calibrator'):
+            calibrated_score = float(model.calibrator.predict([raw_score])[0])
+            risk_score = round(min(max(calibrated_score, 0.0), 100.0), 2)
+        else:
+            risk_score = round(min(max(raw_score, 0.0), 100.0), 2)
+        
+        # Use optimized thresholds if available (v3+ models)
+        if hasattr(model, 'thresholds'):
+            low_thresh, high_thresh = model.thresholds
+            if risk_score <= low_thresh:
+                risk_level = "LOW"
+            elif risk_score <= high_thresh:
+                risk_level = "MEDIUM"
+            else:
+                risk_level = "HIGH"
+        else:
+            risk_level = risk_level_from_score(risk_score)
+        
         model_version = getattr(model, "forestshield_version", "v2-ml")
     else:
         # Rule-based fallback.
@@ -170,18 +216,16 @@ def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
             humidity=features.get("humidity", 0.0),
             fire_distance=fire_dist if fire_dist >= 0 else None,
         )
+        risk_level = risk_level_from_score(risk_score)
         model_version = _FALLBACK_VERSION
 
     return {
         "risk_score": risk_score,
-        "risk_level": risk_level_from_score(risk_score),
+        "risk_level": risk_level,
         "model_version": model_version,
     }
 
-
-# ---------------------------------------------------------------------------
-# Quick smoke-test  —  python inference/predict.py
-# ---------------------------------------------------------------------------
+# Quick smoke-test  —  test risk prediction module independently
 
 if __name__ == "__main__":
     SAMPLES = [

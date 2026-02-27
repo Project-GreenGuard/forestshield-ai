@@ -7,10 +7,7 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-
-# ---------------------------------------------------------------------------
 # Risk scoring helpers
-# ---------------------------------------------------------------------------
 
 def risk_level_from_score(score: float) -> str:
     """
@@ -27,11 +24,7 @@ def risk_level_from_score(score: float) -> str:
         return "MEDIUM"
     return "LOW"
 
-
-# ---------------------------------------------------------------------------
-# Rule-based baseline (mirrors the backend Lambda so we can generate
 # synthetic training labels without a live DynamoDB export).
-# ---------------------------------------------------------------------------
 
 def rule_based_risk_score(
     temperature: float,
@@ -63,11 +56,6 @@ def rule_based_risk_score(
         fire_score = 0.0
 
     return round(min(w1 * temp_score + w2 * humidity_score + w3 * fire_score, 100.0), 2)
-
-
-# ---------------------------------------------------------------------------
-# Geo helpers
-# ---------------------------------------------------------------------------
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Return the great-circle distance in km between two lat/lon points."""
