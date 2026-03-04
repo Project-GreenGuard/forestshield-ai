@@ -1,50 +1,170 @@
 """
-Inference helpers for the ForestShield wildfire risk model.
+ForestShield AI - Inference Module
 
-These functions define the shape of what the backend / Lambdas
-will eventually call, without committing to a specific model
-implementation yet.
+Production-ready inference for wildfire risk prediction.
+Uses trained Gradient Boosting model with 11-feature contract.
 """
 
-from __future__ import annotations
-
+import sys
+from pathlib import Path
 from typing import Dict, Any
+import numpy as np
+import joblib
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from utils.features import build_feature_vector as build_features_array, FEATURE_NAMES
 
 
-def build_feature_vector(sensor_payload: Dict[str, Any]) -> Dict[str, float]:
+# Global model cache
+_MODEL = None
+_MODEL_PATH = Path(__file__).parent.parent / "models" / "wildfire_risk_model.pkl"
+
+
+def load_model():
+    """Load trained model from disk (cached)."""
+    global _MODEL
+    if _MODEL is None:
+        if not _MODEL_PATH.exists():
+            raise FileNotFoundError(f"Model not found: {_MODEL_PATH}")
+        _MODEL = joblib.load(_MODEL_PATH)
+    return _MODEL
+
+
+def predict_risk(sensor_payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Convert a raw sensor payload into a flat feature dict.
-
-    Expected keys (aligned with backend / DynamoDB):
-    - temperature (°C)
-    - humidity (%)
-    - lat, lng
-    - nearestFireDistance (km, optional)
-    - timestamp (ISO8601, optional for time-based features)
-
-    Notes for Samira:
-    - Keep this in sync with the shared AI spec in the main docs.
-    - You can evolve this over time (e.g. add derived features)
-      as long as the contract to the model stays clear.
-    """
-    # This is intentionally left open-ended for now.
-    raise NotImplementedError("Implement feature construction here.")
-
-
-def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
-    """
-    Run a single prediction and return a structured result.
-
-    Output contract (what the rest of the system expects):
+    Run wildfire risk prediction on sensor data.
+    
+    Args:
+        sensor_payload: Dict with keys:
+            - temperature (float): Temperature in °C
+            - humidity (float): Humidity in %
+            - lat (float): Latitude
+            - lng (float): Longitude
+            - nearestFireDistance (float): Distance to nearest fire in km
+            - timestamp (str): ISO 8601 timestamp
+    
+    Returns:
+        Dict with:
+            - risk_score (float): 0-100
+            - risk_level (str): LOW/MEDIUM/HIGH
+            - confidence (float): Model confidence
+            - model_version (str): Model identifier
+    
+    Output contract (for Lambda/backend):
     - risk_score: float between 0 and 100
-    - risk_level: string in {\"LOW\", \"MEDIUM\", \"HIGH\"}
-    - model_version: free-form string, e.g. \"v1-rule-approx\"
-
-    Notes for Samira:
-    - Initially, this can just call a local model (e.g. joblib).
-    - Later, this function can become a thin wrapper around
-      Vertex AI online prediction while keeping the same output
-      shape so callers don't have to change.
+    - risk_level: string in {"LOW", "MEDIUM", "HIGH"}
+    - confidence: float 0-1
+    - model_version: string
     """
-    raise NotImplementedError("Implement model inference here.")
+    # Load model
+    model_data = load_model()
+    model = model_data['model']
+    
+    # Build feature vector using 11-feature contract
+    features = build_features_array(sensor_payload)
+    features = features.reshape(1, -1)  # Shape for sklearn: (1, 11)
+    
+    # Predict risk score
+    risk_score = model.predict(features)[0]
+    risk_score = float(np.clip(risk_score, 0, 100))
+    
+    # Determine risk level (per spec thresholds)
+    if risk_score <= 30:
+        risk_level = "LOW"
+    elif risk_score <= 60:
+        risk_level = "MEDIUM"
+    else:
+        risk_level = "HIGH"
+    
+    # Confidence (simple heuristic based on distance to thresholds)
+    if risk_level == "LOW":
+        confidence = 0.9 if risk_score < 15 else 0.7
+    elif risk_level == "MEDIUM":
+        confidence = 0.85
+    else:
+        confidence = 0.95 if risk_score > 80 else 0.85
+    
+    return {
+        'risk_score': round(risk_score, 2),
+        'risk_level': risk_level,
+        'confidence': confidence,
+        'model_version': model_data.get('version', 'v1.0'),
+    }
+
+
+def main():
+    """Test inference with sample sensor readings."""
+    print("\n╔" + "═"*68 + "╗")
+    print("║" + " "*15 + "ForestShield AI - Model Inference" + " "*20 + "║")
+    print("╚" + "═"*68 + "╝\n")
+    
+    # Load model
+    print("Loading model...")
+    model_data = load_model()
+    print(f"✓ Model version: {model_data.get('version', 'unknown')}")
+    print(f"✓ Trained: {model_data.get('trained_date', 'unknown')}")
+    print(f"✓ Performance: RMSE={model_data['metrics']['rmse']:.2f}, R²={model_data['metrics']['r2']:.3f}\n")
+    
+    # Test scenarios
+    test_cases = [
+        {
+            'name': "HIGH RISK: Close to fire, hot & dry",
+            'payload': {
+                'temperature': 38.0,
+                'humidity': 22.0,
+                'lat': 49.2827,
+                'lng': -123.1207,
+                'nearestFireDistance': 2.5,
+                'timestamp': '2024-07-15T15:30:00Z',
+            }
+        },
+        {
+            'name': "MEDIUM RISK: Moderate distance",
+            'payload': {
+                'temperature': 28.0,
+                'humidity': 45.0,
+                'lat': 51.0447,
+                'lng': -114.0719,
+                'nearestFireDistance': 25.0,
+                'timestamp': '2024-06-20T14:00:00Z',
+            }
+        },
+        {
+            'name': "LOW RISK: Far from fire, cooler",
+            'payload': {
+                'temperature': 22.0,
+                'humidity': 65.0,
+                'lat': 43.6532,
+                'lng': -79.3832,
+                'nearestFireDistance': 85.0,
+                'timestamp': '2024-05-10T10:00:00Z',
+            }
+        },
+    ]
+    
+    print("="*70)
+    print("TEST PREDICTIONS")
+    print("="*70)
+    
+    for i, test in enumerate(test_cases, 1):
+        print(f"\n{i}. {test['name']}")
+        print(f"   Temp: {test['payload']['temperature']}°C, "
+              f"Humidity: {test['payload']['humidity']}%, "
+              f"Fire Distance: {test['payload']['nearestFireDistance']}km")
+        
+        result = predict_risk(test['payload'])
+        
+        print(f"   → Risk Score: {result['risk_score']}/100")
+        print(f"   → Risk Level: {result['risk_level']}")
+        print(f"   → Confidence: {result['confidence']:.0%}")
+    
+    print("\n" + "="*70)
+    print("✅ INFERENCE COMPLETE")
+    print("="*70 + "\n")
+
+
+if __name__ == "__main__":
+    main()
 
