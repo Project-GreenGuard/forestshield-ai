@@ -101,7 +101,7 @@ def generate_training_samples(fires_df: pd.DataFrame, samples_per_fire: int = 20
         # Parse timestamp
         try:
             timestamp = f"{fire['acq_date']}T{str(fire['acq_time']).zfill(4)[:2]}:{str(fire['acq_time']).zfill(4)[2:]}:00Z"
-        except:
+        except Exception:
             timestamp = "2024-06-15T14:00:00Z"  # Default summer afternoon
         
         # Generate samples at various distances
