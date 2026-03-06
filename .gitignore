@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Data Files (NASA MODIS CSVs are large)
+data/*.csv
+data/cache/
+*.csv
+
+# Model Files (trained models are binary/large)
+models/*.pkl
+models/*.joblib
+models/*.h5
+models/*.pt
+
+# Keep directory structure but ignore contents
+!data/.gitkeep
+!models/.gitkeep
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.bak
+
+# Internal tracking documents
+docs/PHASE1_CHECKLIST.md
+*.tmp
+temp/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+.env.local
