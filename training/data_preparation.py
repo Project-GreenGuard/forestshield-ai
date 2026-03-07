@@ -20,13 +20,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.features import build_feature_vector, FEATURE_NAMES
 
 
-def load_nasa_data(data_dir: Path, years: list = None) -> pd.DataFrame:
+def load_nasa_data(data_dir: Path, years: list = None, filter_ontario: bool = True) -> pd.DataFrame:
     """
     Load NASA MODIS fire detection data from CSV files.
     
     Args:
         data_dir: Directory containing modis_YYYY_Canada.csv files
         years: List of years to load (e.g., [2023, 2024]). If None, loads all.
+        filter_ontario: If True, filters to only Ontario fires (default: True)
     
     Returns:
         Combined DataFrame with all fire detections
@@ -34,6 +35,14 @@ def load_nasa_data(data_dir: Path, years: list = None) -> pd.DataFrame:
     print("\n" + "="*70)
     print("LOADING NASA MODIS DATA")
     print("="*70)
+    
+    # Ontario bounding box
+    ONTARIO_BOUNDS = {
+        'min_lon': -95.154327,
+        'max_lon': -74.324722,
+        'min_lat': 41.913319,
+        'max_lat': 56.86895
+    }
     
     dfs = []
     csv_files = sorted(data_dir.glob("modis_*_Canada.csv"))
@@ -52,10 +61,26 @@ def load_nasa_data(data_dir: Path, years: list = None) -> pd.DataFrame:
         df = pd.read_csv(csv_file)
         df['year'] = year
         dfs.append(df)
-        print(f"  ✓ {len(df):,} fire detections")
+        print(f"  [OK] {len(df):,} fire detections")
     
     combined = pd.concat(dfs, ignore_index=True)
-    print(f"\n✓ Total fires loaded: {len(combined):,}")
+    print(f"\n[OK] Total fires loaded: {len(combined):,}")
+    
+    # Filter to Ontario if requested
+    if filter_ontario:
+        print("\nFiltering to Ontario region...")
+        original_count = len(combined)
+        
+        combined = combined[
+            (combined['longitude'] >= ONTARIO_BOUNDS['min_lon']) &
+            (combined['longitude'] <= ONTARIO_BOUNDS['max_lon']) &
+            (combined['latitude'] >= ONTARIO_BOUNDS['min_lat']) &
+            (combined['latitude'] <= ONTARIO_BOUNDS['max_lat'])
+        ]
+        
+        ontario_count = len(combined)
+        percentage = (ontario_count / original_count) * 100
+        print(f"[OK] Ontario fires: {ontario_count:,} ({percentage:.1f}% of total)")
     
     return combined
 
