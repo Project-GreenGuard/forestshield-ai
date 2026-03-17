@@ -23,17 +23,26 @@ from utils.features import build_feature_vector as build_features_array, FEATURE
 
 # Global model cache
 _MODEL = None
+_METADATA = None
 _MODEL_PATH = Path(__file__).parent.parent / "models" / "wildfire_risk_model.pkl"
+_METADATA_PATH = Path(__file__).parent.parent / "models" / "wildfire_risk_metadata.pkl"
 
 
 def load_model():
     """Load trained model from disk (cached)."""
-    global _MODEL
+    global _MODEL, _METADATA
     if _MODEL is None:
         if not _MODEL_PATH.exists():
             raise FileNotFoundError(f"Model not found: {_MODEL_PATH}")
         _MODEL = joblib.load(_MODEL_PATH)
-    return _MODEL
+        
+        # Load metadata if available (optional)
+        if _METADATA_PATH.exists():
+            _METADATA = joblib.load(_METADATA_PATH)
+        else:
+            _METADATA = {}
+    
+    return _MODEL, _METADATA
 
 
 def predict_risk(sensor_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -57,8 +66,7 @@ def predict_risk(sensor_payload: Dict[str, Any]) -> Dict[str, Any]:
             - model_version (str): Model identifier
     """
     # Load model
-    model_data = load_model()
-    model = model_data['model']
+    model, metadata = load_model()
     
     # Build feature vector using 11-feature contract
     features = build_features_array(sensor_payload)
@@ -88,7 +96,7 @@ def predict_risk(sensor_payload: Dict[str, Any]) -> Dict[str, Any]:
         'risk_score': round(risk_score, 2),
         'risk_level': risk_level,
         'confidence': confidence,
-        'model_version': model_data.get('version', 'v1.0'),
+        'model_version': metadata.get('timestamp', 'v1.0'),
     }
 
 
@@ -100,10 +108,10 @@ def main():
     
     # Load model
     print("Loading model...")
-    model_data = load_model()
-    print(f"[OK] Model version: {model_data.get('version', 'unknown')}")
-    print(f"[OK] Trained: {model_data.get('trained_date', 'unknown')}")
-    print(f"[OK] Performance: RMSE={model_data['metrics']['rmse']:.2f}, R2={model_data['metrics']['r2']:.3f}\n")
+    model, metadata = load_model()
+    print(f"[OK] Model version: {metadata.get('timestamp', 'unknown')}")
+    print(f"[OK] Training method: {metadata.get('training_method', 'unknown')}")
+    print(f"[OK] Performance: RMSE={metadata.get('test_rmse', 0):.2f}, R²={metadata.get('test_r2', 0):.3f}\n")
     
     # Test scenarios
     test_cases = [
