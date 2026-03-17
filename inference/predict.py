@@ -1,7 +1,7 @@
 """
 ForestShield AI - Inference Module
 
-Production-ready inference for wildfire risk prediction.
+Prototype inference system for wildfire risk prediction.
 Uses trained Gradient Boosting model with 11-feature contract.
 
 Reference: forestshield/docs/AI_PREDICTION_AND_TRAINING_SPEC.md
