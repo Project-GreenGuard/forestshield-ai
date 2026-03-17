@@ -33,7 +33,7 @@ def main():
     print("Uses actual fire occurrences as ground truth instead of synthetic labels\n")
     
     # 1. Load historical fire data
-    data_dir = Path("data")
+    data_dir = Path("../data")
     fires_df = load_nasa_data(data_dir, years=None, filter_ontario=True)
     
     # 2. Create labeled dataset
@@ -53,7 +53,7 @@ def main():
     )
     
     # Save labeled dataset for inspection
-    output_dir = Path("training/labeled_data")
+    output_dir = Path(__file__).parent / "labeled_data"
     output_dir.mkdir(exist_ok=True)
     labeled_df.to_csv(output_dir / "labeled_training_data.csv", index=False)
     print(f"\n✓ Saved labeled data to {output_dir}/labeled_training_data.csv")

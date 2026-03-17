@@ -271,7 +271,7 @@ if __name__ == "__main__":
     # Example usage
     from training.data_preparation import load_nasa_data
     
-    data_dir = Path("data")
+    data_dir = Path("../data")
     fires_df = load_nasa_data(data_dir, filter_ontario=True)
     
     region_bounds = {

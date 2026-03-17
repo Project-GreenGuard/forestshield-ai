@@ -1,10 +1,15 @@
 # ForestShield AI
 
-Machine learning wildfire risk prediction for Ontario using NASA MODIS fire data.
+Machine learning wildfire risk prediction + fire spread simulation for Ontario using NASA MODIS fire data.
 
 ## Overview
 
-**Gradient Boosting Regressor** trained on **real fire occurrence labels** from **60,970 Ontario fires** (2018-2024) to predict wildfire risk scores (0-100).
+**Risk Prediction**: Gradient Boosting Regressor trained on **real fire occurrence labels** from **60,970 Ontario fires** (2018-2024) to predict wildfire risk scores (0-100).
+
+**Fire Spread**: Real-time fire spread rate and perimeter prediction using empirical models + live weather data from Open-Meteo API.
+- 6/12/24 hour forecast horizons
+- GeoJSON output for map visualization
+- NASA FIRMS validation against actual fires
 
 **Training Method**: Uses actual fire locations as HIGH risk, areas near fires as MEDIUM risk, and areas far from fires as LOW risk (not synthetic distance-based labels).
 
@@ -45,6 +50,60 @@ print(result)
 # {'risk_score': 87.0, 'risk_level': 'HIGH', 'confidence': 0.95, 'model_version': '20260317_101456'}
 ```
 
+## Fire Spread Prediction
+
+**NEW**: Real-time fire spread rate and perimeter prediction with weather integration.
+
+### Install Additional Dependencies
+```bash
+pip install requests numpy
+```
+
+### Complete Fire Assessment (Risk + Spread)
+```python
+from fire_spread.integrated_system import IntegratedFireSystem
+
+system = IntegratedFireSystem()
+
+# Assess location with real-time weather
+assessment = system.assess_location(
+    latitude=43.65,
+    longitude=-79.38,
+    nearest_fire_distance_km=15.0,
+    use_realtime_weather=True,
+    fuel_type='mixed'  # 'grass', 'brush', 'forest', 'mixed'
+)
+
+print(f"Risk: {assessment['risk_assessment']['risk_level']} ({assessment['risk_assessment']['risk_score']}/100)")
+print(f"Spread: {assessment['spread_prediction']['spread_rate_kmh']} km/h")
+print(f"Intensity: {assessment['spread_prediction']['fire_intensity']}/10")
+```
+
+### Simulate Fire Progression
+```python
+# Simulate 12 hours of fire spread
+simulation = system.simulate_fire_progression(
+    ignition_lat=43.65,
+    ignition_lng=-79.38,
+    hours=12,
+    fuel_type='forest',
+    use_forecast=True
+)
+
+print(f"Final Burned Area: {simulation['final_burned_area_km2']} km²")
+print(f"Max Intensity: {simulation['max_intensity']}/10")
+```
+
+### Features
+- ✅ Real-time weather from Open-Meteo API (free, no API key)
+- ✅ Fire spread rate calculation (km/h)
+- ✅ Elliptical fire perimeter modeling
+- ✅ Fire intensity assessment (0-10 scale)
+- ✅ Multi-hour fire progression simulation
+- ✅ Integrated with ML risk predictions
+
+**See [fire_spread/README.md](fire_spread/README.md) for detailed documentation.**
+
 ## Output Contract
 
 ```python
@@ -69,6 +128,12 @@ forestshield-ai/
 │   ├── train.py               # Model training with real labels
 │   └── labeled_data/          # Generated labeled dataset (40,000 samples)
 ├── inference/predict.py        # Prediction interface
+├── fire_spread/               # NEW: Fire spread prediction module
+│   ├── __init__.py
+│   ├── weather_client.py      # Open-Meteo API integration
+│   ├── spread_predictor.py    # Fire spread rate calculation
+│   ├── integrated_system.py   # Combined risk + spread system
+│   └── README.md              # Fire spread documentation
 └── README.md
 ```
 
@@ -141,11 +206,17 @@ Model is joblib format, ready for GCS upload and Vertex AI deployment.
 
 ## Requirements
 
+**Risk Prediction**:
 ```
 pandas>=1.3.0
 numpy>=1.21.0
 scikit-learn>=1.0.0
 joblib>=1.0.0
+```
+
+**Fire Spread (additional)**:
+```
+requests>=2.28.0
 ```
 
 ---
@@ -155,4 +226,4 @@ joblib>=1.0.0
 **Trained**: March 17, 2026  
 **Region**: Ontario, Canada  
 **Labels**: 15,000 HIGH + 10,000 MEDIUM + 15,000 LOW risk samples  
-**Status**: Production Ready
+**Status**: Prototype for real-time wildfire risk assessment and forecasting
