@@ -54,6 +54,11 @@ docs/PHASE1_CHECKLIST.md
 *.tmp
 temp/
 
+# Analytics & Heatmap runtime data
+analytics/prediction_log.json
+heatmap/heatmap_cache.json
+heatmap/demo_heatmap_output.json
+
 # Distribution / packaging
 build/
 dist/
