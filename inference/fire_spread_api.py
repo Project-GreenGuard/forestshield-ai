@@ -68,7 +68,6 @@ def predict_fire_spread(data: dict, hours: int = 24) -> dict:
                 'lng': start_lng + lng_offset
             })
         
-        # ✅ FIXED: Return keys match backend expectations
         return {
             'spread_rate': round(spread_rate, 2),
             'direction': round(direction, 1),
