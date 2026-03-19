@@ -140,6 +140,16 @@ if __name__ == "__main__":
         "timestamp": "2024-07-20T15:00:00Z",
     }
 
+    # Medium-risk scenario: warm, moderate humidity, fire at mid-range
+    medium_risk = {
+        "temperature": 30.0,
+        "humidity": 50.0,
+        "lat": 45.40,
+        "lng": -75.69,
+        "nearestFireDistance": 50.0,
+        "timestamp": "2024-06-01T12:00:00Z",
+    }
+
     # Low-risk scenario: mild temperature, high humidity, no fire nearby
     low_risk = {
         "temperature": 18.0,
@@ -150,7 +160,7 @@ if __name__ == "__main__":
         "timestamp": "2024-03-10T08:00:00Z",
     }
 
-    for label, payload in [("HIGH-risk sample", high_risk), ("LOW-risk sample", low_risk)]:
+    for label, payload in [("HIGH-risk sample", high_risk), ("MEDIUM-risk sample", medium_risk), ("LOW-risk sample", low_risk)]:
         print(f"\n── {label} ──")
         print("Payload :", json.dumps(payload))
         features = build_feature_vector(payload)
