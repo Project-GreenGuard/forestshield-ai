@@ -79,7 +79,7 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 
     # Real fire detections from MODIS/FIRMS
     base = pd.DataFrame()
-    base["temperature"] = pd.to_numeric(df["bright_t31"], errors="coerce") - 273.15
+    base["temperature"] = (pd.to_numeric(df["bright_t31"], errors="coerce") - 273.15).clip(0.0, 50.0)
     base["lat"] = pd.to_numeric(df["latitude"], errors="coerce")
     base["lng"] = pd.to_numeric(df["longitude"], errors="coerce")
 
@@ -104,21 +104,21 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 
     # Positive samples: actual NASA fire detections
     pos = base.copy()
-    pos["humidity"] = rng.uniform(5.0, 45.0, len(pos))
+    pos["humidity"] = rng.uniform(20.0, 30.0, len(pos))   # high risk
     pos["nearest_fire_dist"] = rng.uniform(0.5, 8.0, len(pos))
-    pos["risk_score"] = rng.uniform(75.0, 100.0, len(pos))
+    pos["risk_score"] = rng.uniform(61.0, 100.0, len(pos))
 
     # Medium-risk samples
     mid = base.copy()
-    mid["humidity"] = rng.uniform(30.0, 65.0, len(mid))
+    mid["humidity"] = rng.uniform(31.0, 60.0, len(mid))   # medium risk
     mid["nearest_fire_dist"] = rng.uniform(15.0, 50.0, len(mid))
-    mid["risk_score"] = rng.uniform(35.0, 65.0, len(mid))
+    mid["risk_score"] = rng.uniform(31.0, 60.0, len(mid))
 
     # Low-risk / no-fire-style samples
     neg = base.copy()
-    neg["humidity"] = rng.uniform(50.0, 95.0, len(neg))
+    neg["humidity"] = rng.uniform(61.0, 90.0, len(neg))   # low risk
     neg["nearest_fire_dist"] = rng.uniform(60.0, 150.0, len(neg))
-    neg["risk_score"] = rng.uniform(0.0, 25.0, len(neg))
+    neg["risk_score"] = rng.uniform(0.0, 30.0, len(neg))
 
     out = pd.concat([pos, mid, neg], ignore_index=True)
     out = out.sample(frac=1, random_state=42).reset_index(drop=True)

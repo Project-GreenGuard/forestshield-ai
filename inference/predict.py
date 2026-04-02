@@ -96,12 +96,15 @@ def build_feature_vector(sensor_payload: Dict[str, Any]) -> Dict[str, float]:
         ts = datetime.now(timezone.utc)
 
     fire_dist = sensor_payload.get("nearestFireDistance")
-    if fire_dist is None or fire_dist < 0:
+    if fire_dist is None or float(fire_dist) < 0:
         fire_dist = 100.0
 
+    temperature = min(max(float(sensor_payload.get("temperature", 20.0)), 0.0), 50.0)
+    humidity = min(max(float(sensor_payload.get("humidity", 50.0)), 20.0), 90.0)
+
     return {
-        "temperature": float(sensor_payload.get("temperature", 20.0)),
-        "humidity": float(sensor_payload.get("humidity", 50.0)),
+        "temperature": temperature,
+        "humidity": humidity,
         "lat": float(sensor_payload.get("lat", 0.0)),
         "lng": float(sensor_payload.get("lng", 0.0)),
         "nearest_fire_dist": float(fire_dist),
@@ -117,7 +120,7 @@ def estimate_spread_rate(features: Dict[str, float], risk_score: float) -> float
     predicted risk all increase spread rate.
     """
     temp_factor = min(max(features["temperature"], 0.0), 50.0) / 50.0
-    humidity_factor = 1.0 - min(max(features["humidity"], 0.0), 100.0) / 100.0
+    humidity_factor = 1.0 - min(max(features["humidity"], 20.0), 90.0) / 100.0
     risk_factor = min(max(risk_score, 0.0), 100.0) / 100.0
 
     distance = max(features["nearest_fire_dist"], 0.5)
@@ -148,23 +151,22 @@ def generate_ai_insights(
     elif features["temperature"] >= 28:
         reasons.append("elevated temperature")
 
-    if features["humidity"] <= 25:
+    if features["humidity"] <= 30:
         reasons.append("very low humidity")
-    elif features["humidity"] <= 40:
-        reasons.append("low humidity")
+    elif features["humidity"] <= 60:
+        reasons.append("moderate humidity")
+    else:
+        reasons.append("higher humidity conditions")
 
     if features["nearest_fire_dist"] <= 10:
         reasons.append("active fire detected nearby")
-    elif features["nearest_fire_dist"] <= 30:
+    elif features["nearest_fire_dist"] <= 50:
         reasons.append("fire activity within operational range")
 
     if risk_score >= 75:
         reasons.append("strong model confidence in severe wildfire conditions")
-    elif risk_score >= 45 and not reasons:
+    elif risk_score >= 45 and len(reasons) <= 2:
         reasons.append("moderate environmental risk conditions")
-
-    if not reasons:
-        reasons.append("stable environmental conditions")
 
     if risk_score >= 61:
         action = "Dispatch emergency responders, monitor evacuation zones, and issue high-priority alerts."
@@ -209,7 +211,7 @@ def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
 if __name__ == "__main__":
     high_risk = {
         "temperature": 42.0,
-        "humidity": 15.0,
+        "humidity": 22.0,
         "lat": 48.50,
         "lng": -81.33,
         "nearestFireDistance": 2.0,
@@ -221,7 +223,7 @@ if __name__ == "__main__":
         "humidity": 50.0,
         "lat": 45.40,
         "lng": -75.69,
-        "nearestFireDistance": 50.0,
+        "nearestFireDistance": 30.0,
         "timestamp": "2024-06-01T12:00:00Z",
     }
 
